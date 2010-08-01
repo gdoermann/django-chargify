@@ -1,0 +1,27 @@
+Chargify API wrapper for the Django framework
+chargify
+
+This is a Django wrapper for the Chargify API which requires pychargify (it actually includes it as I have made some alterations to include coupons). 
+It allows you to interface with the Chargify API by just creating and manipulating standard model objects. 
+
+Installation
+Place this library on your python path
+Add "chargify" to your installed apps
+Modify the chargify_settings_config.py to include your Chargify info
+sync your database
+
+
+Notes on django south:
+If you use django south, this application is under migration control.
+When you sync the database it will try and do an import from chargify for you to import existing information from Chargify.com.
+
+Requirements
+pychargify
+django
+south (optional)
+
+
+Contributors:
+  Greg Doermann - Core Development
+
+
