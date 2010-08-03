@@ -5,6 +5,8 @@ from django.db import models
 from chargify.pychargify.api import ChargifyNotFound
 import logging
 log = logging.getLogger("chargify")
+#logging.basicConfig(level=logging.DEBUG)
+
 
 class ChargifyBaseModel(object):
     """ You can change the gateway/subdomain used by 
@@ -87,7 +89,7 @@ class Customer(models.Model, ChargifyBaseModel):
             return '%s %s' %(self.first_name, self.last_name)
     
     def __unicode__(self):
-        return self.full_name()
+        return self.full_name() + u' - ' + str(self.chargify_id )
     
     def _get_first_name(self):
         if self._first_name is not None:
@@ -272,9 +274,11 @@ class CreditCardManager(ChargifyBaseManager):
 class CreditCard(models.Model, ChargifyBaseModel):
     """ This data should NEVER be saved in the database """
     CC_TYPES = CHARGIFY_CC_TYPES
-    full_number = ''
+    _full_number = ''
     ccv = ''
     
+    first_name = models.CharField(max_length = 50, null=True, blank=False)
+    last_name = models.CharField(max_length = 50, null=True, blank=False)
     masked_card_number = models.CharField(max_length=25, null=True)
     expiration_month = models.IntegerField(null=True, blank=True)
     expiration_year = models.IntegerField(null=True, blank=True)
@@ -285,6 +289,9 @@ class CreditCard(models.Model, ChargifyBaseModel):
     billing_zip = models.CharField(max_length=15, null=True, blank=False, default='')
     billing_country = models.CharField(max_length=75, null=True, blank=True, default='United States')
     objects = CreditCardManager()
+    
+    def __unicode__(self):
+        return self.first_name + u' ' + self.last_name + u' - ' + self.masked_card_number
     
     # you have to set the customer if there is no related subscription yet
     _customer = None
@@ -299,17 +306,16 @@ class CreditCard(models.Model, ChargifyBaseModel):
         self._customer = customer
     customer = property(_get_customer, _set_customer)
     
-    def _first_name(self):
-        return self.customer.first_name
-    def _set_first_name(self, first_name):
-        self.customer.first_name = first_name
-    first_name = property(_first_name, _set_first_name)
-    
-    def _last_name(self):
-        return self.customer.last_name
-    def _set_last_name(self, last_name):
-        self.customer.last_name = last_name
-    last_name = property(_last_name, _set_last_name)
+    def _get_full_number(self):
+        return self._full_number
+    def _set_full_number(self, full_number):
+        self._full_number = full_number
+        
+        if len(full_number) > 4:
+            self.masked_card_number = u'XXXX-XXXX-XXXX-' + full_number[-4:]
+        else: #not a real CC number, probably a testing number
+            self.masked_card_number = u'XXXX-XXXX-XXXX-1111'
+    full_number = property(_get_full_number, _set_full_number)
     
     def save(self,  save_api = False, *args, **kwargs):
         if save_api:
@@ -322,7 +328,7 @@ class CreditCard(models.Model, ChargifyBaseModel):
         self.expiration_year = api.expiration_year
         self.credit_type = api.type
         if commit:
-            return self.save(save_ap = False)
+            return self.save(save_api = False)
         return self
     
     def update(self, commit=True):
@@ -337,7 +343,7 @@ class CreditCard(models.Model, ChargifyBaseModel):
         cc = self.gateway.CreditCard(node_name)
         cc.first_name = self.first_name
         cc.last_name = self.last_name
-        cc.full_number = self.full_number
+        cc.full_number = self._full_number
         cc.expiration_month = self.expiration_month
         cc.expiration_year = self.expiration_year
         cc.ccv = self.ccv
@@ -388,26 +394,26 @@ class SubscriptionManager(ChargifyBaseManager):
         
 
 class Subscription(models.Model, ChargifyBaseModel):
-    TRAILING = 'trialing'
+    TRIALING = 'trialing'
     ASSESSING = 'assessing'
     ACTIVE = 'active'
     SOFT_FAILURE = 'soft_failure'
     PAST_DUE = 'past_due'
     SUSPENDED = 'suspended'
-    CANCELED = 'canceled'
+    CANCELLED = 'canceled'
     EXPIRED = 'expired'
     STATE_CHOICES = (
-         (TRAILING, TRAILING),
-         (ASSESSING, ASSESSING),
-         (ACTIVE, ACTIVE),
-         (SOFT_FAILURE, SOFT_FAILURE),
-         (PAST_DUE, PAST_DUE),
-         (SUSPENDED, SUSPENDED),
-         (CANCELED, CANCELED),
-         (EXPIRED, EXPIRED),
+         (TRIALING, u'Trialing'),
+         (ASSESSING, u'Assessing'),
+         (ACTIVE, u'Active'),
+         (SOFT_FAILURE, u'Soft Failure'),
+         (PAST_DUE, u'Past Due'),
+         (SUSPENDED, u'Suspended'),
+         (CANCELLED, u'Cancelled'),
+         (EXPIRED, u'Expired'),
          )
     chargify_id = models.IntegerField(null=True, blank=False, unique=True)
-    state = models.CharField(max_length=15, null=True, blank=True, default='')
+    state = models.CharField(max_length=15, null=True, blank=True, default='', choices=STATE_CHOICES)
     balance = models.DecimalField(decimal_places = 2, max_digits = 15, default=Decimal('0.00'))
     current_period_started_at = models.DateTimeField(null=True, blank=True)
     current_period_ends_at = models.DateTimeField(null=True, blank=True)
@@ -419,8 +425,11 @@ class Subscription(models.Model, ChargifyBaseModel):
     updated_at = models.DateTimeField(null=True, blank=True)
     customer = models.ForeignKey(Customer, null=True)
     product = models.ForeignKey(Product, null=True)
-    credit_card = models.ForeignKey(CreditCard, related_name='subscription', null=True)
+    credit_card = models.OneToOneField(CreditCard, related_name='subscription', null=True)
     objects = SubscriptionManager()
+    
+    def __unicode__(self):
+        return self.get_state_display() + u' ' + self.product.name + u' - ' + str(self.chargify_id)
     
     def _balance_in_cents(self):
         return self._in_cents(self.balance)
@@ -489,8 +498,12 @@ class Subscription(models.Model, ChargifyBaseModel):
     
     def update(self, commit=True):
         """ Update Subscription data from chargify """
-        subscription = self.gateway.Subscription().getBySubscriptionId(self.chargify_id)
-        return self.load(subscription, commit)
+        subscriptions = self.gateway.Subscription().getBySubscriptionId(self.chargify_id)
+        
+        if len(subscriptions) > 0:
+            return self.load(subscriptions[0], commit)
+        else:
+            return None
     
     def upgrade(self, product):
         """ Upgrade / Downgrade products """
