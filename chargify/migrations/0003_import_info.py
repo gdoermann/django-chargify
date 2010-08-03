@@ -6,11 +6,14 @@ from south.db import db
 from south.v2 import DataMigration
 import datetime
 import traceback
+from django.conf import settings
 
 class Migration(DataMigration):
     
     def forwards(self, orm):
         "Write your forwards methods here."
+        if getattr(settings, "TESTING", None):
+            return
         products = {}
         for product in CHARGIFY.Product().getAll():
             try:

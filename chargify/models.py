@@ -147,7 +147,7 @@ class Customer(models.Model, ChargifyBaseModel):
         if not self.id or not self.chargify_id or api.modified_at > self.chargify_updated_at:
             log.debug('Loading Customer API: %s' %(api))
             log.debug('Customer ID: %s' %(api.id))
-            self.chargify_id = api.id
+            self.chargify_id = int(api.id)
             try:
                 if self.user:
                     self.first_name = api.first_name
@@ -217,6 +217,10 @@ class Product(models.Model, ChargifyBaseModel):
         self.price = self._from_cents(price)
     price_in_cents = property(_price_in_cents, _set_price_in_cents)
     
+    def _set_handle(self, handle):
+        self.handle = str(handle)
+    product_handle = property(handle, _set_handle)
+    
     def save(self, save_api = False, **kwargs):
         if save_api:
             try:
@@ -229,7 +233,7 @@ class Product(models.Model, ChargifyBaseModel):
         return super(Product, self).save(**kwargs)
     
     def load(self, api, commit=True):
-        self.chargify_id = api.id
+        self.chargify_id = int(api.id)
         self.price_in_cents = api.price_in_cents
         self.name = api.name
         self.handle = api.handle
@@ -249,7 +253,7 @@ class Product(models.Model, ChargifyBaseModel):
     def _api(self, node_name = ''):
         """ Load data into chargify api object """
         product = self.gateway.Product(node_name)
-        product.id = self.chargify_id
+        product.id = str(self.chargify_id)
         product.price_in_cents = self.price_in_cents
         product.name = self.name
         product.handle = self.handle
@@ -450,7 +454,7 @@ class Subscription(models.Model, ChargifyBaseModel):
         return super(Subscription, self).save(*args, **kwargs)
     
     def load(self, api, commit=True):
-        self.chargify_id = api.id
+        self.chargify_id = int(api.id)
         self.state = api.state
         self.balance_in_cents = api.balance_in_cents
 #        self.current_period_started_at = api.current_period_started_at
@@ -496,7 +500,7 @@ class Subscription(models.Model, ChargifyBaseModel):
         """ Load data into chargify api object """
         subscription = self.gateway.Subscription(node_name)
         if self.chargify_id:
-            subscription.id = self.chargify_id
+            subscription.id = str(self.chargify_id)
         subscription.product = self.product.api
         subscription.product_handle = self.product_handle
         subscription.customer = self.customer._api('customer_attributes')

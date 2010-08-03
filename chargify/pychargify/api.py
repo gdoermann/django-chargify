@@ -258,6 +258,7 @@ class ChargifyBase(object):
         """
         Handled the request and sends it to the server
         """
+        log.log(5, "Sending XML: %s" %(data))
         http = httplib.HTTPSConnection(self.request_host)
         
         http.putrequest(method, url)
@@ -464,7 +465,7 @@ class ChargifySubscription(ChargifyBase):
         return self._applyA(self._get('/customers/' + customer_id + '/subscriptions.xml'), self.__name__, 'subscription')
     
     def getBySubscriptionId(self, subscription_id):
-        return self._applyA(self._get('/subscriptions/' + subscription_id + '.xml'), self.__name__, 'subscription')
+        return self._applyA(self._get('/subscriptions/' + str(subscription_id) + '.xml'), self.__name__, 'subscription')
 
     def save(self):
         return self._save('subscriptions', 'subscription')
