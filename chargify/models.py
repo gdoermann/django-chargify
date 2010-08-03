@@ -3,6 +3,8 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from django.db import models
 from chargify.pychargify.api import ChargifyNotFound
+import logging
+log = logging.getLogger("chargify")
 
 class ChargifyBaseModel(object):
     """ You can change the gateway/subdomain used by 
@@ -124,19 +126,28 @@ class Customer(models.Model, ChargifyBaseModel):
     
     def save(self, save_api = False, **kwargs):
         if save_api:
+            saved = False
             try:
                 saved, customer = self.api.save()
             except ChargifyNotFound:
                 api = self.api
                 api.id = None
                 saved, customer = api.save()
+            
             if saved:
+                log.debug("Customer Saved")
                 return self.load(customer, commit=True) # object save happens after load
+            else:
+                log.debug("Customer Not Saved")
+                log.debug(customer)
         self.user.save()
         return super(Customer, self).save(**kwargs)
     
     def load(self, api, commit=True):
-        if not self.id or api.modified_at > self.chargify_updated_at:
+        if not self.id or not self.chargify_id or api.modified_at > self.chargify_updated_at:
+            log.debug('Loading Customer API: %s' %(api))
+            log.debug('Customer ID: %s' %(api.id))
+            self.chargify_id = api.id
             try:
                 if self.user:
                     self.first_name = api.first_name
@@ -154,6 +165,8 @@ class Customer(models.Model, ChargifyBaseModel):
             self.chargify_created_at = api.created_at
             if commit:
                 return self.save()
+        else:
+            log.debug('Not loading api')
         return self
     
     def update(self, commit = True):
@@ -418,10 +431,19 @@ class Subscription(models.Model, ChargifyBaseModel):
     def save(self, save_api = False, *args, **kwargs):
         if save_api:
             if self.customer.chargify_id is None:
+                log.debug('Saving Customer')
                 self.customer.save(save_api = True)
+                customer = self.customer
+                log.debug("Returned Customer: %s" %(customer))
+                log.debug('Customer ID: %s' %(customer.chargify_id))
+                self.customer = customer
             if self.product.chargify_id is None:
-                self.product.save(save_api = True)
+                log.debug('Saving Product')
+                product = self.product.save(save_api = True)
+                log.debug("Returned Product : %s" %(product))
+                self.product = product
             api = self.api
+            log.debug('Saving API')
             saved, subscription = api.save()
             if saved:
                 return self.load(subscription, commit=True) # object save happens after load
@@ -431,14 +453,14 @@ class Subscription(models.Model, ChargifyBaseModel):
         self.chargify_id = api.id
         self.state = api.state
         self.balance_in_cents = api.balance_in_cents
-        self.current_period_started_at = api.current_period_started_at
-        self.current_period_ends_at = api.current_period_ends_at
-        self.trial_started_at = api.trial_started_at
-        self.trial_ended_at = api.trial_ended_at
-        self.activated_at = api.activated_at
-        self.expires_at = api.expires_at
-        self.created_at = api.created_at
-        self.updated_at = api.updated_at
+#        self.current_period_started_at = api.current_period_started_at
+#        self.current_period_ends_at = api.current_period_ends_at
+#        self.trial_started_at = api.trial_started_at
+#        self.trial_ended_at = api.trial_ended_at
+#        self.activated_at = api.activated_at
+#        self.expires_at = api.expires_at
+#        self.created_at = api.created_at
+#        self.updated_at = api.updated_at
         try:
             c = Customer.objects.get(chargify_id = api.customer.id)
         except:
@@ -473,11 +495,11 @@ class Subscription(models.Model, ChargifyBaseModel):
     def _api(self, node_name = ''):
         """ Load data into chargify api object """
         subscription = self.gateway.Subscription(node_name)
-        subscription.id = self.chargify_id
-        subscription.product_handle = self.product_handle
+        if self.chargify_id:
+            subscription.id = self.chargify_id
         subscription.product = self.product.api
+        subscription.product_handle = self.product_handle
         subscription.customer = self.customer._api('customer_attributes')
         subscription.credit_card = self.credit_card._api('credit_card_attributes')
-        print subscription.id, subscription.product_handle, subscription.product.id, subscription.customer.id, subscription.customer.reference 
         return subscription
     api = property(_api)

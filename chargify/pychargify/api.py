@@ -38,14 +38,40 @@ except Exception, e:
             exit()
 
 from xml.dom import minidom
+import logging
 
+log = logging.getLogger("pychargify.api")
 
 class ChargifyError(Exception):
     """
     A Chargify Releated error
     @license    GNU General Public License
     """
-    pass
+    def __init__(self, xml = None, **kwargs):
+        self.xml = xml
+        if xml:
+            self.errors = self._parse_errors(xml)
+    
+    def _get_node_text(self, node):
+        s = ''
+        if node.nodeType == node.TEXT_NODE:
+            val = node.data
+            if val.strip():
+                s += val
+        else:
+            for child in node.childNodes:
+                s += self._get_node_text(child)
+        return s
+    def _parse_errors(self, xml):
+        dom = minidom.parseString(xml)
+        nodes = dom.getElementsByTagName('errors')
+        errors = []
+        for node in nodes:
+            for child in node.childNodes:
+                val = self._get_node_text(child)
+                if val.strip():
+                    errors.append(val)
+        return errors
 
 class ChargifyUnAuthorized(ChargifyError):
     """
@@ -202,7 +228,7 @@ class ChargifyBase(object):
         
         # Unprocessable Entity Error
         elif response.status == 422:
-            raise ChargifyUnProcessableEntity()
+            raise ChargifyUnProcessableEntity(response.read())
         
         # Generic Server Errors
         elif response.status in [405, 500]:
@@ -245,6 +271,12 @@ class ChargifyBase(object):
 
         http.send(data)
         response = http.getresponse()
+        val = ''
+        try:
+            val = response.read()
+            log.log(5, "Server Response: %s" %(val))
+        except:
+            pass
         
         # Unauthorized Error
         if response.status == 401:
@@ -260,13 +292,12 @@ class ChargifyBase(object):
         
         # Unprocessable Entity Error
         elif response.status == 422:
-            raise ChargifyUnProcessableEntity()
+            raise ChargifyUnProcessableEntity(val)
         
         # Generic Server Errors
         elif response.status in [405, 500]:
-            raise ChargifyServerError()
-        
-        return response.read()
+            raise ChargifyServerError(val)
+        return val
     
     def _save(self, url, node_name):
         """
@@ -336,6 +367,15 @@ class ChargifyCustomer(ChargifyBase):
     def getSubscriptions(self):
         obj = ChargifySubscription(self.api_key, self.sub_domain)
         return obj.getByCustomerId(self.id)
+    
+    def _toxml(self, dom):
+        if self.id is not None:
+            node = minidom.Element("customer_id")
+            node_txt = dom.createTextNode(str(self.id))
+            node.appendChild(node_txt)
+            return node
+        else:
+            return super(ChargifyCustomer, self)._toxml(dom)
     
     def save(self):
         return self._save('customers', 'customer')
