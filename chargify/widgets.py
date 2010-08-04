@@ -1,11 +1,11 @@
-from bursar.bursar_settings import get_bursar_setting
-from bursar.numbers import round_decimal
+""" Taken from the satchmo/bursar project """
+from chargify.numbers import round_decimal
 from django import forms
+from django.conf import settings
 from django.utils.safestring import mark_safe
-from livesettings import config_value
 import logging
 
-log = logging.getLogger('satchmo_utils.widgets')
+log = logging.getLogger('chargify.widgets')
 
 def _render_decimal(value, places=2, min_places=2):
 
@@ -45,29 +45,17 @@ class BaseCurrencyWidget(forms.TextInput):
         if attrs is not None:
             final_attrs.update(attrs)
         super(BaseCurrencyWidget, self).__init__(attrs=final_attrs)
-        
+
 class CurrencyWidget(BaseCurrencyWidget):
     
     def render(self, name, value, attrs=None):
         if value != '':
             value = _render_decimal(value, places=8)
         rendered = super(CurrencyWidget, self).render(name, value, attrs)
-        curr = get_bursar_setting('CURRENCY')
+        curr = getattr(settings, 'CURRENCY', '$')
         curr = curr.replace("_", "&nbsp;")
         return mark_safe('<span class="currency">%s</span>%s' % (curr, rendered))
 
-class TruncatedCurrencyWidget(BaseCurrencyWidget):
-    """
-    A Text Input widget that shows the currency amount - stripped to two digits by default.
-    """
-                
-    def render(self, name, value, attrs=None):
-        value = _render_decimal(value, places=2)
-        rendered = super(TruncatedCurrencyWidget, self).render(name, value, attrs)
-        curr = config_value('LANGUAGE','CURRENCY')
-        curr = curr.replace("_", "&nbsp;")
-        return mark_safe('<span class="currency">%s</span>%s' % (curr, rendered))
-        
 class StrippedDecimalWidget(forms.TextInput):
     """
     A textinput widget that strips out the trailing zeroes.

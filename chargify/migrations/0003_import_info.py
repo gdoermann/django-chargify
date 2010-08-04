@@ -1,6 +1,4 @@
 # encoding: utf-8
-from chargify.chargify_settings import CHARGIFY
-from chargify.models import Subscription
 from django.db import models
 from south.db import db
 from south.v2 import DataMigration
@@ -12,6 +10,8 @@ class Migration(DataMigration):
     
     def forwards(self, orm):
         "Write your forwards methods here."
+        from chargify.chargify_settings import CHARGIFY
+        from chargify.models import Subscription
         if getattr(settings, "TESTING", None):
             return
         products = {}
@@ -39,6 +39,7 @@ class Migration(DataMigration):
     
     def backwards(self, orm):
         "Write your backwards methods here."
+        pass
     
     models = {
         'auth.group': {

@@ -1,5 +1,5 @@
-from django.contrib import admin
 from chargify.models import *
+from django.contrib import admin
 
 admin.site.register(Customer)
 admin.site.register(Product)

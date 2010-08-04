@@ -1,7 +1,5 @@
 from django.test import TestCase
-from chargify import models
 from chargify.chargify_settings import CHARGIFY
-from chargify.pychargify.api import ChargifyNotFound
 
 class TestModels(TestCase):
     def test_customer(self):
