@@ -198,6 +198,19 @@ class ProductManager(ChargifyBaseManager):
     def _api(self):
         return self.gateway.Product()
     api = property(_api)
+    
+    def update_all(self):
+        products = {}
+        for product in self.gateway.Product().getAll():
+            try:
+                p, loaded = self.get_or_load(product.id)
+                if not loaded:
+                    p.update()
+                p.save()
+                products[product.handle] = p
+            except:
+                log.error('Failed to load product: %s' %(product))
+                log.error(traceback.format_exc())
 
 class Product(models.Model, ChargifyBaseModel):
     MONTH = 'month'
@@ -374,17 +387,7 @@ class SubscriptionManager(ChargifyBaseManager):
     def update_all(self):
         """ You should only run this when you first install the product!
         VERY EXPENSIVE!!! """
-        products = {}
-        for product in self.gateway.Product().getAll():
-            try:
-                p, loaded = Product.objects.get_or_load(product.id)
-                if not loaded:
-                    p.update()
-                p.save()
-                products[product.handle] = p
-            except:
-                log.error('Failed to load product: %s' %(product))
-                log.error(traceback.format_exc())
+        Product.objects.update_all()
         
         for customer in self.gateway.Customer().getAll():
             c, loaded = Customer.objects.get_or_load(customer.id)
