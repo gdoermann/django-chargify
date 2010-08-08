@@ -51,8 +51,11 @@ class ChargifyError(Exception):
     xml = None
     def __init__(self, xml = None, **kwargs):
         self.xml = xml
-        if xml:
-            self.errors = self._parse_errors(xml)
+        if xml and xml.strip():
+            try:
+                self.errors = self._parse_errors(xml)
+            except:
+                pass
     
     def _get_node_text(self, node):
         s = ''
