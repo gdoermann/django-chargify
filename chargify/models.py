@@ -137,7 +137,9 @@ class Customer(models.Model, ChargifyBaseModel):
             saved = False
             try:
                 saved, customer = self.api.save()
-            except ChargifyNotFound:
+            except ChargifyNotFound, e:
+                for error in e.errors:
+                    log.exception(error)
                 api = self.api
                 api.id = None
                 saved, customer = api.save()
@@ -529,7 +531,10 @@ class Subscription(models.Model, ChargifyBaseModel):
             subscription.id = str(self.chargify_id)
         subscription.product = self.product.api
         subscription.product_handle = self.product_handle
-        subscription.customer = self.customer._api('customer_attributes')
+        if self.customer.chargify_id is None:
+            subscription.customer = self.customer._api('customer_attributes')
+        else:
+            subscription.customer = self.customer._api('customer_id')
         subscription.credit_card = self.credit_card._api('credit_card_attributes')
         return subscription
     api = property(_api)

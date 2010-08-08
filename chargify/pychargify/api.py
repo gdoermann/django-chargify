@@ -328,7 +328,6 @@ class ChargifyBase(object):
                         return (True, obj)
             return (False, obj)
         else:
-            log.debug('Id: %s') %(self.id)
             obj = self._applyS(self._post('/' + url + '.xml', dom.toxml(encoding="utf-8")), self.__name__, node_name)
             if obj:
                 if type(obj.updated_at) == datetime.datetime:
@@ -377,8 +376,8 @@ class ChargifyCustomer(ChargifyBase):
         return obj.getByCustomerId(self.id)
     
     def _toxml(self, dom):
-        if self.id is not None:
-            node = minidom.Element("customer_id")
+        if self.id is not None and self.__xmlnodename__ == 'customer_id':
+            node = minidom.Element(self.__xmlnodename__)
             node_txt = dom.createTextNode(str(self.id))
             node.appendChild(node_txt)
             return node
