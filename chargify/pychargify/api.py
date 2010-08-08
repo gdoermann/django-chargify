@@ -47,6 +47,8 @@ class ChargifyError(Exception):
     A Chargify Releated error
     @license    GNU General Public License
     """
+    errors = []
+    xml = None
     def __init__(self, xml = None, **kwargs):
         self.xml = xml
         if xml:
@@ -286,15 +288,15 @@ class ChargifyBase(object):
         
         # Unauthorized Error
         if response.status == 401:
-            raise ChargifyUnAuthorized()
+            raise ChargifyUnAuthorized(val)
         
         # Forbidden Error
         elif response.status == 403:
-            raise ChargifyForbidden()
+            raise ChargifyForbidden(val)
         
         # Not Found Error
         elif response.status == 404:
-            raise ChargifyNotFound()
+            raise ChargifyNotFound(val)
         
         # Unprocessable Entity Error
         elif response.status == 422:
