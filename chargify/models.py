@@ -465,7 +465,7 @@ class Subscription(models.Model, ChargifyBaseModel):
                 log.debug("Returned Customer: %s" %(customer))
                 log.debug('Customer ID: %s' %(customer.chargify_id))
                 self.customer = customer
-            if self.product.chargify_id is None:
+            if self.product and self.product.chargify_id is None:
                 log.debug('Saving Product')
                 product = self.product.save(save_api = True)
                 log.debug("Returned Product : %s" %(product))

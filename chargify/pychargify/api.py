@@ -114,7 +114,6 @@ class ChargifyServerError(ChargifyError):
     """
     pass
 
-
 class ChargifyBase(object):
     """
     The ChargifyBase class provides a common base for all classes in this module
