@@ -80,6 +80,7 @@ class Customer(models.Model, ChargifyBaseModel):
     _first_name = models.CharField(max_length = 50, null=True, blank=False)
     _last_name = models.CharField(max_length = 50, null = True, blank=False)
     _email = models.EmailField(null=True, blank=False)
+    _reference = models.CharField(max_length = 50, null=True, blank=True)
     organization = models.CharField(max_length = 75, null=True, blank=True)
     
     # Read only chargify fields
@@ -124,16 +125,22 @@ class Customer(models.Model, ChargifyBaseModel):
             self._email = email
     email = property(_get_email, _set_email)
     
-    def _reference(self):
+    def _get_reference(self):
         """ You must save the customer before you can get the reference number"""
-        if self.id:
+        if self._reference:
+            return self._reference
+        elif self.id:
             return self.id
         else:
             return ''
-    reference = property(_reference)
+    def _set_reference(self, reference):
+        self._reference = str(reference)
+    reference = property(_get_reference, _set_reference)
     
     def save(self, save_api = False, **kwargs):
         if save_api:
+            if not self.id:
+                super(Customer, self).save(**kwargs)
             saved = False
             try:
                 saved, customer = self.api.save()
@@ -154,9 +161,8 @@ class Customer(models.Model, ChargifyBaseModel):
         return super(Customer, self).save(**kwargs)
     
     def load(self, api, commit=True):
-        if not self.id or not self.chargify_id or api.modified_at > self.chargify_updated_at:
+        if self.id or self.chargify_id:# api.modified_at > self.chargify_updated_at:
             log.debug('Loading Customer API: %s' %(api))
-            log.debug('Customer ID: %s' %(api.id))
             self.chargify_id = int(api.id)
             try:
                 if self.user:
@@ -192,7 +198,7 @@ class Customer(models.Model, ChargifyBaseModel):
         customer.last_name = str(self.last_name)
         customer.email = str(self.email)
         customer.organization = str(self.organization)
-        customer.reference = str(self.id)
+        customer.reference = str(self.reference)
         return customer
     api = property(_api)
 

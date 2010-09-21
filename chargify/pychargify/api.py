@@ -574,7 +574,6 @@ class ChargifyPostBack(ChargifyBase):
         for obj in postdata_objects:
             self.subscriptions.append(csub.getBySubscriptionId(obj))
 
-
 class Chargify:
     """
     The Chargify class provides the main entry point to the Charify API
