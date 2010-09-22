@@ -5,6 +5,7 @@ from django.db import models
 from pychargify.api import ChargifyNotFound
 import logging
 import traceback
+from django.utils.datetime_safe import new_datetime
 log = logging.getLogger("chargify")
 #logging.basicConfig(level=logging.DEBUG)
 
@@ -26,6 +27,16 @@ class ChargifyBaseModel(object):
     
     def update(self):
         raise NotImplementedError()
+    
+    def disable(self, commit=True):
+        self.active = False
+        if commit:
+            self.save()
+    
+    def enable(self, commit=True):
+        self.active = True
+        if commit:
+            self.save()
 
 class ChargifyBaseManager(models.Manager):
     def _gateway(self):
@@ -62,6 +73,13 @@ class ChargifyBaseManager(models.Manager):
         if not loaded:
             val.update()
         return val
+    
+    def reload_all(self):
+        self._check_api()
+        items = self.api.getAll()
+        for item in items:
+            val = self.load_and_update(item.id)
+            val.save()
 
 class CustomerManager(ChargifyBaseManager):
     def _api(self):
@@ -82,6 +100,7 @@ class Customer(models.Model, ChargifyBaseModel):
     _email = models.EmailField(null=True, blank=False)
     _reference = models.CharField(max_length = 50, null=True, blank=True)
     organization = models.CharField(max_length = 75, null=True, blank=True)
+    active = models.BooleanField(default=True)
     
     # Read only chargify fields
     chargify_created_at = models.DateTimeField(null=True)
@@ -162,28 +181,32 @@ class Customer(models.Model, ChargifyBaseModel):
     
     def load(self, api, commit=True):
         if self.id or self.chargify_id:# api.modified_at > self.chargify_updated_at:
-            log.debug('Loading Customer API: %s' %(api))
-            self.chargify_id = int(api.id)
-            try:
-                if self.user:
-                    self.first_name = api.first_name
-                    self.last_name = api.last_name
-                    self.email = api.email
-            except User.DoesNotExist: #@UndefinedVariable
-                try:
-                    user = User.objects.get(email=api.email)
-                except:
-                    user = User(first_name = api.first_name, last_name = api.last_name, email = api.email, username = api.email)
-                    user.save()
-                self.user = user
-            self.organization = api.organization
-            self.chargify_updated_at = api.modified_at
-            self.chargify_created_at = api.created_at
-            if commit:
-                self.save()
+            customer = self
         else:
-            log.debug('Not loading api')
-        return self
+#            log.debug('Not loading api')
+            customer = Customer()
+        log.debug('Loading Customer API: %s' %(api))
+        customer.chargify_id = int(api.id)
+        try:
+            if customer.user:
+                customer.first_name = api.first_name
+                customer.last_name = api.last_name
+                customer.email = api.email
+            else:
+                raise User.DoesNotExist
+        except User.DoesNotExist: #@UndefinedVariable
+            try:
+                user = User.objects.get(email=api.email)
+            except:
+                user = User(first_name = api.first_name, last_name = api.last_name, email = api.email, username = api.email)
+                user.save()
+            customer.user = user
+        customer.organization = api.organization
+        customer.chargify_updated_at = api.modified_at
+        customer.chargify_created_at = api.created_at
+        if commit:
+            customer.save()
+        return customer
     
     def update(self, commit = True):
         """ Update customer data from chargify """
@@ -207,7 +230,7 @@ class ProductManager(ChargifyBaseManager):
         return self.gateway.Product()
     api = property(_api)
     
-    def update_all(self):
+    def reload_all(self):
         products = {}
         for product in self.gateway.Product().getAll():
             try:
@@ -235,6 +258,7 @@ class Product(models.Model, ChargifyBaseModel):
     accounting_code = models.CharField(max_length=30, null=True)
     interval_unit = models.CharField(max_length=10, choices = INTERVAL_TYPES, default=MONTH)
     interval = models.IntegerField(default=1)
+    active = models.BooleanField(default=True)
     objects = ProductManager()
     
     def __unicode__(self):
@@ -315,10 +339,22 @@ class CreditCard(models.Model, ChargifyBaseModel):
     billing_state = models.CharField(max_length=2, null=True, blank=False, default='')
     billing_zip = models.CharField(max_length=15, null=True, blank=False, default='')
     billing_country = models.CharField(max_length=75, null=True, blank=True, default='United States')
+    active = models.BooleanField(default=True)
     objects = CreditCardManager()
     
     def __unicode__(self):
-        return self.first_name + u' ' + self.last_name + u' - ' + self.masked_card_number
+        s = u''
+        if self.first_name:
+            s += unicode(self.first_name)
+        if self.last_name:
+            if s:
+                s += u' '
+            s += unicode(self.last_name)
+        if self.masked_card_number:
+            if s:
+                s += u'-'
+            s += unicode(self.masked_card_number)
+        return s
     
     # you have to set the customer if there is no related subscription yet
     _customer = None
@@ -350,6 +386,8 @@ class CreditCard(models.Model, ChargifyBaseModel):
         return super(CreditCard, self).save(*args, **kwargs)
     
     def load(self, api, commit=True):
+        if api is None:
+            return self
         self.masked_card_number = api.masked_card_number
         self.expiration_month = api.expiration_month
         self.expiration_year = api.expiration_year
@@ -392,27 +430,21 @@ class SubscriptionManager(ChargifyBaseManager):
             sub= self.load_and_update(id)
             sub.save()
     
-    def update_all(self):
+    def reload_all(self):
         """ You should only run this when you first install the product!
         VERY EXPENSIVE!!! """
-        Product.objects.update_all()
-        
-        for customer in self.gateway.Customer().getAll():
-            c, loaded = Customer.objects.get_or_load(customer.id)
-            if not loaded:
-                c.update()
-            c.save()
-            try:
-                subscription = self.api.getByCustomerId(customer.id)
+        Product.objects.reload_all()
+        for customer in Customer.objects.filter(active=True):
+            subscriptions = self.api.getByCustomerId(str(customer.chargify_id))
+            if not subscriptions:
+                continue
+            for subscription in subscriptions:
                 try:
                     sub = self.get(chargify_id = subscription.id)
                 except:
                     sub = self.model()
                     sub.load(subscription)
                 sub.save()
-            except:
-                pass
-        
 
 class Subscription(models.Model, ChargifyBaseModel):
     TRIALING = 'trialing'
@@ -433,7 +465,7 @@ class Subscription(models.Model, ChargifyBaseModel):
          (CANCELLED, u'Cancelled'),
          (EXPIRED, u'Expired'),
          )
-    chargify_id = models.IntegerField(null=True, blank=False, unique=True)
+    chargify_id = models.IntegerField(null=True, blank=True, unique=True)
     state = models.CharField(max_length=15, null=True, blank=True, default='', choices=STATE_CHOICES)
     balance = models.DecimalField(decimal_places = 2, max_digits = 15, default=Decimal('0.00'))
     current_period_started_at = models.DateTimeField(null=True, blank=True)
@@ -446,11 +478,18 @@ class Subscription(models.Model, ChargifyBaseModel):
     updated_at = models.DateTimeField(null=True, blank=True)
     customer = models.ForeignKey(Customer, null=True)
     product = models.ForeignKey(Product, null=True)
-    credit_card = models.OneToOneField(CreditCard, related_name='subscription', null=True)
+    credit_card = models.OneToOneField(CreditCard, related_name='subscription', null=True, blank=True)
+    active = models.BooleanField(default=True)
     objects = SubscriptionManager()
     
     def __unicode__(self):
-        return self.get_state_display() + u' ' + self.product.name + u' - ' + str(self.chargify_id)
+        s = unicode(self.get_state_display())
+        if self.product:
+            s += u' ' + self.product.name
+        if self.chargify_id:
+            s += ' - ' + unicode(self.chargify_id)
+        
+        return s
     
     def _balance_in_cents(self):
         return self._in_cents(self.balance)
@@ -463,6 +502,8 @@ class Subscription(models.Model, ChargifyBaseModel):
     product_handle = property(_product_handle)
     
     def save(self, save_api = False, *args, **kwargs):
+        if self.chargify_id is None:
+            save_api = True
         if save_api:
             if self.customer.chargify_id is None:
                 log.debug('Saving Customer')
@@ -487,14 +528,16 @@ class Subscription(models.Model, ChargifyBaseModel):
         self.chargify_id = int(api.id)
         self.state = api.state
         self.balance_in_cents = api.balance_in_cents
-#        self.current_period_started_at = api.current_period_started_at
-#        self.current_period_ends_at = api.current_period_ends_at
-#        self.trial_started_at = api.trial_started_at
-#        self.trial_ended_at = api.trial_ended_at
-#        self.activated_at = api.activated_at
-#        self.expires_at = api.expires_at
-#        self.created_at = api.created_at
-#        self.updated_at = api.updated_at
+        self.current_period_started_at = new_datetime(api.current_period_started_at)
+        self.current_period_ends_at = new_datetime(api.current_period_ends_at)
+        self.trial_started_at = new_datetime(api.trial_started_at)
+        self.trial_ended_at = new_datetime(api.trial_ended_at)
+        if api.activated_at:
+            self.activated_at = new_datetime(api.activated_at)
+        if api.expires_at:
+            self.expires_at = new_datetime(api.expires_at)
+        self.created_at = new_datetime(api.created_at)
+        self.updated_at = new_datetime(api.updated_at)
         try:
             c = Customer.objects.get(chargify_id = api.customer.id)
         except:
@@ -507,6 +550,8 @@ class Subscription(models.Model, ChargifyBaseModel):
         except:
             p = Product()
             p.load(api.product)
+            p.save()
+        self.product = p
         
         if self.credit_card:
             credit_card = self.credit_card
@@ -541,6 +586,7 @@ class Subscription(models.Model, ChargifyBaseModel):
             subscription.customer = self.customer._api('customer_attributes')
         else:
             subscription.customer = self.customer._api('customer_id')
-        subscription.credit_card = self.credit_card._api('credit_card_attributes')
+        if self.credit_card:
+            subscription.credit_card = self.credit_card._api('credit_card_attributes')
         return subscription
     api = property(_api)
