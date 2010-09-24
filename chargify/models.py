@@ -2,13 +2,17 @@ from chargify_settings import CHARGIFY, CHARGIFY_CC_TYPES
 from decimal import Decimal
 from django.contrib.auth.models import User
 from django.db import models
+from django.utils.datetime_safe import new_datetime
 from pychargify.api import ChargifyNotFound
 import logging
+import time
 import traceback
-from django.utils.datetime_safe import new_datetime
+from django.conf import settings
 log = logging.getLogger("chargify")
 #logging.basicConfig(level=logging.DEBUG)
 
+def unique_reference(prefix = ''):
+    return '%s%i' %(prefix, time.time()*1000)
 
 class ChargifyBaseModel(object):
     """ You can change the gateway/subdomain used by 
@@ -146,6 +150,9 @@ class Customer(models.Model, ChargifyBaseModel):
     
     def _get_reference(self):
         """ You must save the customer before you can get the reference number"""
+        if getattr(settings, 'TESTING', False) and not self._reference:
+            self._reference = unique_reference()
+        
         if self._reference:
             return self._reference
         elif self.id:
@@ -530,12 +537,22 @@ class Subscription(models.Model, ChargifyBaseModel):
         self.balance_in_cents = api.balance_in_cents
         self.current_period_started_at = new_datetime(api.current_period_started_at)
         self.current_period_ends_at = new_datetime(api.current_period_ends_at)
-        self.trial_started_at = new_datetime(api.trial_started_at)
-        self.trial_ended_at = new_datetime(api.trial_ended_at)
+        if api.trial_started_at:
+            self.trial_started_at = new_datetime(api.trial_started_at)
+        else:
+            self.trial_started_at = None
+        if api.trial_ended_at:
+            self.trial_ended_at = new_datetime(api.trial_ended_at)
+        else:
+            self.trial_ended_at = None
         if api.activated_at:
             self.activated_at = new_datetime(api.activated_at)
+        else:
+            self.activated_at = None
         if api.expires_at:
             self.expires_at = new_datetime(api.expires_at)
+        else:
+            self.expires_at = None
         self.created_at = new_datetime(api.created_at)
         self.updated_at = new_datetime(api.updated_at)
         try:
