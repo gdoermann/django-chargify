@@ -1,6 +1,5 @@
 from chargify import models
 from chargify.chargify_settings import CHARGIFY
-from chargify.pychargify.api import ChargifyUnProcessableEntity
 from django.contrib.auth.models import User
 from django.test import TestCase
 import time
