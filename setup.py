@@ -1,14 +1,14 @@
 from setuptools import setup, find_packages
 
-VERSION = (1, 0, 0)
+VERSION = (2, 0, 0)
 
 # Dynamically calculate the version based on VERSION tuple
-if len(VERSION)>2 and VERSION[2] is not None:
-    str_version = "%d.%d_%s" % VERSION[:3]
+if len(VERSION) > 2 and VERSION[2] is not None:
+    str_version = "{}.{}.{}".format(*VERSION[:3])
 else:
-    str_version = "%d.%d" % VERSION[:2]
+    str_version = "{}.{}".format(*VERSION[:2])
 
-version= str_version
+version = str_version
 
 setup(
     name = 'django-chargify',
@@ -16,7 +16,7 @@ setup(
     description = "chargify",
     long_description = """This is a generic SDK for hooking up with the Chargify API""",
     author = 'Greg Doermann',
-    author_email = 'gdoermann@snirk.com',
+    author_email = 'greg@tell.bz',
     url = 'http://github.com/gdoermann/django-chargify',
     license = 'GNU General Public License',
     platforms = ['any'],
