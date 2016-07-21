@@ -1,0 +1,6 @@
+-r production.txt
+Werkzeug
+git-up
+ipython
+coverage
+tox
