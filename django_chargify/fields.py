@@ -1,9 +1,9 @@
-from chargify.numbers import round_decimal, RoundedDecimalError
+from django_chargify.numbers import round_decimal, RoundedDecimalError
 from decimal import Decimal
 from django import forms
 from django.db.models.fields import DecimalField
 from widgets import CurrencyWidget
-from chargify import chargify_settings
+from django_chargify import chargify_settings
 from django.utils.translation import ugettext_lazy as _
 
 

@@ -1,6 +1,6 @@
-from chargify import models
+from django_chargify import models
 from django.contrib import admin, messages
-from chargify import exceptions
+from django_chargify import exceptions
 
 
 def update(modeladmin, request, queryset):
@@ -66,4 +66,4 @@ class SubscriptionAdmin(admin.ModelAdmin):
 
 admin.site.register(models.Subscription, SubscriptionAdmin)
 
-admin.site.register(models.CreditCard)
+admin.site.register(CreditCard)

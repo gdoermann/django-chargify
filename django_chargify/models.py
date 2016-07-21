@@ -1,11 +1,11 @@
 import uuid
 
-from chargify_settings import CHARGIFY, CHARGIFY_CC_TYPES
+from django_chargify.chargify_settings import CHARGIFY, CHARGIFY_CC_TYPES
 from decimal import Decimal
 from django.contrib.auth.models import User
 from django.db import models
 from django.utils.datetime_safe import new_datetime
-from chargify.exceptions import ChargifyNotFoundException
+from django_chargify.exceptions import ChargifyNotFoundException
 import logging
 import traceback
 from django.conf import settings

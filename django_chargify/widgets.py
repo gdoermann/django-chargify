@@ -1,5 +1,5 @@
 """ Taken from the satchmo/bursar project """
-from chargify.numbers import round_decimal
+from django_chargify.numbers import round_decimal
 from django import forms
 from django.conf import settings
 from django.utils.safestring import mark_safe

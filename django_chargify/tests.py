@@ -1,5 +1,5 @@
-from chargify import models
-from chargify.chargify_settings import CHARGIFY
+from django_chargify import models
+from django_chargify.chargify_settings import CHARGIFY
 from django.contrib.auth.models import User
 from django.test import TestCase
 import time
